@@ -1,0 +1,147 @@
+---
+title: "Stat_tests"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Distrinutional comparison across sentiment for the four 15-day slots
+```{r}
+Ash1=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ash1.csv",stringsAsFactors = FALSE)
+Ash2=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ash2.csv",stringsAsFactors = FALSE)
+Ash3=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ash3.csv",stringsAsFactors = FALSE)
+Ash4=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ash4.csv",stringsAsFactors = FALSE)
+#Ash_full=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Scripts/Ash_full.csv",stringsAsFactors = FALSE)
+
+#ASH before 15 days distribution comparison
+Ash1$Date <- strptime(Ash1$Date..CST., '%m/%d/%Y %H:%M')
+Ash1$Date <- as.Date( Ash1$Date, '%m/%d/%Y')
+
+
+gby=group_by(Ash1,Date,Category)
+dataframe1=summarise(gby,n = n())
+dataframe1=as.data.frame(dataframe1)
+
+Neg_sent=dataframe1[dataframe1$Category=="Basic Negative",]
+Neg_sent$n=Neg_sent$n/sum(Neg_sent$n)
+Neg_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="red")
+Pos_sent=dataframe1[dataframe1$Category=="Basic Positive",]
+Pos_sent$n=Pos_sent$n/sum(Pos_sent$n)
+Pos_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="green")
+Neu_sent=dataframe1[dataframe1$Category=="Basic Neutral",]
+Neu_sent$n=Neu_sent$n/sum(Neu_sent$n)
+Neu_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="blue")
+max_len=max(length(Neu_sent$n),length(Pos_sent$n),length(Neg_sent$n))
+Pos_sent_prob <- sample(Pos_sent$n, max_len, 1)
+Neg_sent_prob <- sample(Neg_sent$n, max_len, 1)
+Neu_sent_prob <- sample(Neu_sent$n, max_len, 1)
+
+kl_metric_pos_ash1=sum(Pos_sent_prob*log(Pos_sent_prob/Neu_sent_prob,base = exp(1)))
+kl_metric_neg_ash1=sum(Neg_sent_prob*log(Neg_sent_prob/Neu_sent_prob,base = exp(1)))
+
+#ASH first 15 days distribution comparison
+Ash2$Date <- strptime(Ash2$Date..CST., '%m/%d/%Y %H:%M')
+Ash2$Date <- as.Date( Ash2$Date, '%m/%d/%Y')
+
+
+gby=group_by(Ash2,Date,Category)
+dataframe2=summarise(gby,n = n())
+dataframe2=as.data.frame(dataframe2)
+
+Neg_sent=dataframe2[dataframe2$Category=="Basic Negative",]
+Neg_sent$n=Neg_sent$n/sum(Neg_sent$n)
+Neg_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="red")
+Pos_sent=dataframe2[dataframe2$Category=="Basic Positive",]
+Pos_sent$n=Pos_sent$n/sum(Pos_sent$n)
+Pos_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="green")
+Neu_sent=dataframe2[dataframe2$Category=="Basic Neutral",]
+Neu_sent$n=Neu_sent$n/sum(Neu_sent$n)
+Neu_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="blue")
+max_len=max(length(Neu_sent$n),length(Pos_sent$n),length(Neg_sent$n))
+Pos_sent_prob <- sample(Pos_sent$n, max_len, 1)
+Neg_sent_prob <- sample(Neg_sent$n, max_len, 1)
+Neu_sent_prob <- sample(Neu_sent$n, max_len, 1)
+
+kl_metric_pos_ash2=sum(Pos_sent_prob*log(Pos_sent_prob/Neu_sent_prob,base = exp(1)))
+kl_metric_neg_ash2=sum(Neg_sent_prob*log(Neg_sent_prob/Neu_sent_prob,base = exp(1)))
+
+#ASH 15-30 days distribution comparison
+Ash3$Date <- strptime(Ash3$Date..CST., '%m/%d/%Y %H:%M')
+Ash3$Date <- as.Date( Ash3$Date, '%m/%d/%Y')
+
+
+gby=group_by(Ash3,Date,Category)
+dataframe3=summarise(gby,n = n())
+dataframe3=as.data.frame(dataframe3)
+
+Neg_sent=dataframe3[dataframe3$Category=="Basic Negative",]
+Neg_sent$n=Neg_sent$n/sum(Neg_sent$n)
+Neg_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="red")
+Pos_sent=dataframe3[dataframe3$Category=="Basic Positive",]
+Pos_sent$n=Pos_sent$n/sum(Pos_sent$n)
+Pos_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="green")
+Neu_sent=dataframe3[dataframe3$Category=="Basic Neutral",]
+Neu_sent$n=Neu_sent$n/sum(Neu_sent$n)
+Neu_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="blue")
+max_len=max(length(Neu_sent$n),length(Pos_sent$n),length(Neg_sent$n))
+Pos_sent_prob <- sample(Pos_sent$n, max_len, 1)
+Neg_sent_prob <- sample(Neg_sent$n, max_len, 1)
+Neu_sent_prob <- sample(Neu_sent$n, max_len, 1)
+
+kl_metric_pos_ash3=sum(Pos_sent_prob*log(Pos_sent_prob/Neu_sent_prob,base = exp(1)))
+kl_metric_neg_ash3=sum(Neg_sent_prob*log(Neg_sent_prob/Neu_sent_prob,base = exp(1)))
+
+
+#ASH 30-45 days distribution comparison
+Ash4$Date <- strptime(Ash4$Date..CST., '%m/%d/%Y %H:%M')
+Ash4$Date <- as.Date( Ash4$Date, '%m/%d/%Y')
+
+
+gby=group_by(Ash4,Date,Category)
+dataframe4=summarise(gby,n = n())
+dataframe4=as.data.frame(dataframe4)
+
+Neg_sent=dataframe4[dataframe4$Category=="Basic Negative",]
+Neg_sent$n=Neg_sent$n/sum(Neg_sent$n)
+Neg_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="red")
+Pos_sent=dataframe4[dataframe4$Category=="Basic Positive",]
+Pos_sent$n=Pos_sent$n/sum(Pos_sent$n)
+Pos_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="green")
+Neu_sent=dataframe4[dataframe4$Category=="Basic Neutral",]
+Neu_sent$n=Neu_sent$n/sum(Neu_sent$n)
+Neu_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="blue")
+max_len=max(length(Neu_sent$n),length(Pos_sent$n),length(Neg_sent$n))
+Pos_sent_prob <- sample(Pos_sent$n, max_len, 1)
+Neg_sent_prob <- sample(Neg_sent$n, max_len, 1)
+Neu_sent_prob <- sample(Neu_sent$n, max_len, 1)
+
+kl_metric_pos_ash4=sum(Pos_sent_prob*log(Pos_sent_prob/Neu_sent_prob,base = exp(1)))
+kl_metric_neg_ash4=sum(Neg_sent_prob*log(Neg_sent_prob/Neu_sent_prob,base = exp(1)))
+
+KL_table=cbind(c(kl_metric_pos_ash1,kl_metric_pos_ash2,kl_metric_pos_ash3,kl_metric_pos_ash4),c(kl_metric_neg_ash1,kl_metric_neg_ash2,kl_metric_neg_ash3,kl_metric_neg_ash4))
+rownames(KL_table)=c("Before_15","First_15","B/w_15_30","B/w_30_45")
+colnames(KL_table)=c("POS/NEU","NEG/NEU")
+KL_table
+
+## Perform chi square test for different time slots and report results
+table(full_df$Category,full_df$slot)
+gby=group_by(full_df,slot,Category)
+df=summarise(gby,n = sum(n))
+df=as.data.frame(df)
+chi_mat=matrix(df$n,nrow=4,byrow = TRUE)
+chisq.test(chi_mat)
+
+### Regression on tweet counts
+dataframe1$slot=rep("slot1",nrow(dataframe1))
+dataframe2$slot=rep("slot2",nrow(dataframe2))
+dataframe3$slot=rep("slot3",nrow(dataframe3))
+dataframe4$slot=rep("slot4",nrow(dataframe4))
+full_df=rbind(dataframe1,dataframe2,dataframe3,dataframe4)
+lm_fit=lm(n~.-Date,data=full_df)
+summary(lm_fit)
+
+
+
+```

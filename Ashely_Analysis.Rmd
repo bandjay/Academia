@@ -1,0 +1,518 @@
+---
+title: "Ashley Madison sentiment analysis"
+author: 'JayaChandu Bandlamudi'
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Loading required Packages and Data
+
+```{r,warning=FALSE, echo=FALSE, cache=TRUE}
+## loading required pacakges and Data
+memory.limit(100000)
+library(ggplot2) # Data visualization
+library(ggdendro)
+library(readr) # CSV file I/O, e.g. the read_csv function
+library(tm) # Package for text mining
+library(SnowballC)
+library(wordcloud)
+library(dplyr)
+library(gridExtra)
+library(RColorBrewer) # Data Visualization
+library(openNLP)
+library(koRpus)
+library(Rstem)
+library(lsa)
+```
+
+### Necessary functions for plots
+```{r,fig.width=12,fig.height=35,warning=FALSE, echo=FALSE,cache=TRUE}
+### word cloud function
+wcloud_Ashley <- function(documents){
+     documents = gsub("[^a-zA-Z0-9 ]", "", documents)
+    documents= gsub("[[:digit:]]", "",documents)
+    documents= gsub("http\\w+", "", documents)
+    documents = gsub("\n", "", documents)  
+    wordcorpus <- Corpus(VectorSource(documents)) %>% 
+    tm_map(content_transformer(tolower)) %>%
+    #tm_map(stemDocument,language = "english") %>% 
+    tm_map(removePunctuation) %>%
+    tm_map(stripWhitespace) %>% 
+    tm_map(removeWords,stopwords("english")) %>%
+    tm_map(removeWords,
+           c("Ashley Madison","ashleymadison","madison","madisons","ashley","http","website",
+             "WWW","twitter")) %>%
+    DocumentTermMatrix() %>%
+    as.matrix() %>%
+    as.data.frame()
+  return(wordcorpus)
+} 
+
+
+wcloud_Privacy <- function(documents){
+    documents = gsub("[^a-zA-Z0-9 ]", "", documents)
+    documents= gsub("[[:digit:]]", "",documents)
+    documents= gsub("http\\w+", "", documents)
+    documents = gsub("\n", "", documents)  
+    wordcorpus <- Corpus(VectorSource(documents)) %>% 
+    tm_map(content_transformer(tolower)) %>%
+    #tm_map(stemDocument,language = "english") %>% 
+    tm_map(removePunctuation) %>%
+    tm_map(stripWhitespace) %>% 
+    tm_map(removeWords,stopwords("english")) %>%
+    tm_map(removeWords,
+           c("privacy","security","http","website",
+             "WWW","twitter")) %>%
+    DocumentTermMatrix() %>%
+    as.matrix() %>%
+    as.data.frame()
+  return(wordcorpus)
+} 
+##### word plot function
+word_plot<-function(df)
+{
+#names(df)
+#dim(df)
+
+df_Neutral=df[df$Category=="Basic Neutral",]
+df_Positive=df[df$Category=="Basic Positive",]
+df_Negative=df[df$Category=="Basic Negative",]
+
+df_Neutral_clean <- as.data.frame(wcloud_Ashley(df_Neutral$Contents))
+freq <- colSums(df_Neutral_clean)
+freq <- sort(freq,decreasing = T)
+df_Neutral_Top50 <-head(data.frame(word=names(freq), freq=freq),50)
+
+
+df_Positive_clean <- as.data.frame(wcloud_Ashley(df_Positive$Contents))
+freq <- colSums(df_Positive_clean)
+freq <- sort(freq,decreasing = T)
+df_Postive_Top50 <- head(data.frame(word=names(freq), freq=freq),50)
+
+df_Negative_clean <- as.data.frame(wcloud_Ashley(df_Negative$Contents))
+freq <- colSums(df_Negative_clean)
+freq <- sort(freq,decreasing = T)
+df_Negative_Top50 <- head(data.frame(word=names(freq), freq=freq),50)
+
+df_Postive_Top50$Category="blue"
+df_Negative_Top50$Category="red"
+df_Neutral_Top50$Category="green"
+
+df_words=rbind(df_Postive_Top50,df_Negative_Top50,df_Neutral_Top50)
+
+s <- as.String(df_words$word)
+
+## Need sentence and word token annotations.
+sent_token_annotator <- Maxent_Sent_Token_Annotator()
+word_token_annotator <- Maxent_Word_Token_Annotator()
+a2 <- annotate(s, list(sent_token_annotator, word_token_annotator))
+
+pos_tag_annotator <- Maxent_POS_Tag_Annotator()
+#pos_tag_annotator
+a3 <- annotate(s, pos_tag_annotator, a2)
+a3
+## Variant with POS tag probabilities as (additional) features.
+#head(annotate(s, Maxent_POS_Tag_Annotator(probs = TRUE), a2))
+
+## Determine the distribution of POS tags for word tokens.
+a3w <- subset(a3, type == "word")
+tags <- sapply(a3w$features, `[[`, "POS")
+df_words$tag=tags
+attach(df_words)
+df_words=df_words[tag=='JJ' | tag== 'JJS' | tag== 'NN' | tag=='NNS',]
+### unigram plot
+plot5=ggplot(aes(word, freq),data=df_words)+geom_bar(stat="identity",fill=df_words$Category,position = "stack")+theme(axis.text.x=element_text(angle=45, hjust=1))+ggtitle("Words and category plot")
+
+
+df_clean <- wcloud_Ashley(df$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+#plot6=wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[200]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+
+# parsing date
+date_and_time <- strptime(df$Date..CST., '%m/%d/%Y %H:%M')
+df$Date <- as.Date( df$Date, '%m/%d/%Y')
+df$Year <- as.numeric(format(date_and_time, '%Y'))
+df$Month <- as.numeric(format(date_and_time, '%m'))
+df$Day <- as.numeric(format(date_and_time, '%d'))
+df$Source=NULL # Source is always twitter and deleted
+df$GUID=NULL # GUID is deleted
+df$URL=NULL   # user URL is deleted
+df$Klout.Score=NULL # Klout.Score is deleted
+
+# Timeseries of tweet category for the 60-days
+#detach("package:plyr", unload=TRUE) 
+gby=group_by(df,Date,Category)
+dataframe=summarise(gby,n = n())
+dataframe=as.data.frame(dataframe)
+plot1=ggplot(dataframe,aes(x=Date, y=n, col=Category)) + geom_line()+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Tweet sentiment with time")
+
+
+# Sentiment by gender
+g=group_by(df,Gender,Category,Date)
+dataframe=summarise(g,n = n())
+dataframe=as.data.frame(dataframe)
+dfMale=dataframe[dataframe$Gender=="M",]
+dfFemale=dataframe[dataframe$Gender=="F",]
+
+#Male sentiment graph
+plot2=ggplot(dfMale,aes(x=Date, y=n, col=Category) )+ geom_line()+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Male sentiment with time")
+
+#Female sentiment graph
+plot3=ggplot(dfFemale,aes(x=Date, y=n, col=Category) )+ geom_line()+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Female sentiment with time")
+
+
+## Sentiment by country
+g=group_by(df,Country,Category)
+dataframe=summarise(g,n = n())
+dataframe=as.data.frame(dataframe)
+dataframe=dataframe[order(-dataframe$n),]
+
+plot4= head(dataframe,60) %>% ggplot(aes(x=Country, y=n,fill=Category)) +scale_x_discrete()+
+    geom_bar(stat="identity")+ xlab("Country") + ylab("Tweet counts")+ggtitle("country sentiment with time")+theme(axis.text.x=element_text(angle=45, hjust=1))
+
+plots=grid.arrange( plot1, plot2, plot3,plot4,plot5,nrow=5)
+print(plots)
+
+}
+
+###### word plots privacy
+word_plot_Privacy<-function(df)
+{
+#names(df)
+#dim(df)
+
+df_Neutral=df[df$Category=="Basic Neutral",]
+df_Positive=df[df$Category=="Basic Positive",]
+df_Negative=df[df$Category=="Basic Negative",]
+
+df_Neutral_clean <- as.data.frame(wcloud_Privacy(df_Neutral$Contents))
+freq <- colSums(df_Neutral_clean)
+freq <- sort(freq,decreasing = T)
+df_Neutral_Top50 <-head(data.frame(word=names(freq), freq=freq),50)
+
+
+df_Positive_clean <- as.data.frame(wcloud_Privacy(df_Positive$Contents))
+freq <- colSums(df_Positive_clean)
+freq <- sort(freq,decreasing = T)
+df_Postive_Top50 <- head(data.frame(word=names(freq), freq=freq),50)
+
+df_Negative_clean <- as.data.frame(wcloud_Privacy(df_Negative$Contents))
+freq <- colSums(df_Negative_clean)
+freq <- sort(freq,decreasing = T)
+df_Negative_Top50 <- head(data.frame(word=names(freq), freq=freq),50)
+
+df_Postive_Top50$Category="blue"
+df_Negative_Top50$Category="red"
+df_Neutral_Top50$Category="green"
+
+df_words=rbind(df_Postive_Top50,df_Negative_Top50,df_Neutral_Top50)
+
+s <- as.String(df_words$word)
+
+## Need sentence and word token annotations.
+sent_token_annotator <- Maxent_Sent_Token_Annotator()
+word_token_annotator <- Maxent_Word_Token_Annotator()
+a2 <- annotate(s, list(sent_token_annotator, word_token_annotator))
+
+pos_tag_annotator <- Maxent_POS_Tag_Annotator()
+#pos_tag_annotator
+a3 <- annotate(s, pos_tag_annotator, a2)
+## Variant with POS tag probabilities as (additional) features.
+#head(annotate(s, Maxent_POS_Tag_Annotator(probs = TRUE), a2))
+
+## Determine the distribution of POS tags for word tokens.
+a3w <- subset(a3, type == "word")
+tags <- sapply(a3w$features, `[[`, "POS")
+df_words$tag=tags
+attach(df_words)
+df_words=df_words[tag=='JJ' | tag== 'JJS' | tag== 'NN' | tag=='NNS',]
+### unigram plot
+plot5=ggplot(aes(word, freq),data=df_words)+geom_bar(stat="identity",fill=df_words$Category,position = "stack")+theme(axis.text.x=element_text(angle=45, hjust=1))+ggtitle("Words and category plot")
+
+
+
+
+
+df_clean <- wcloud_Privacy(df$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+#plot6=wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[200]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+
+# parsing date
+date_and_time <- strptime(df$Date..CST., '%m/%d/%Y %H:%M')
+df$Date <- as.Date( df$Date, '%m/%d/%Y')
+df$Year <- as.numeric(format(date_and_time, '%Y'))
+df$Month <- as.numeric(format(date_and_time, '%m'))
+df$Day <- as.numeric(format(date_and_time, '%d'))
+df$Source=NULL # Source is always twitter and deleted
+df$GUID=NULL # GUID is deleted
+df$URL=NULL   # user URL is deleted
+df$Klout.Score=NULL # Klout.Score is deleted
+
+# Timeseries of tweet category for the 60-days
+#detach("package:plyr", unload=TRUE) 
+gby=group_by(df,Date,Contents)
+dataframe=summarise(gby,n = n())
+dataframe=as.data.frame(dataframe)
+plot1=ggplot(dataframe,aes(x=Date, y=n, col=Category)) + geom_line()+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Tweet sentiment with time")
+
+
+# Sentiment by gender
+g=group_by(df,Gender,Category,Date)
+dataframe=summarise(g,n = n())
+dataframe=as.data.frame(dataframe)
+dfMale=dataframe[dataframe$Gender=="M",]
+dfFemale=dataframe[dataframe$Gender=="F",]
+
+#Male sentiment graph
+plot2=ggplot(dfMale,aes(x=Date, y=n, col=Category) )+ geom_line()+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Male sentiment with time")
+
+#Female sentiment graph
+plot3=ggplot(dfFemale,aes(x=Date, y=n, col=Category) )+ geom_line()+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Female sentiment with time")
+
+
+## Sentiment by country
+g=group_by(df,Country,Category)
+dataframe=summarise(g,n = n())
+dataframe=as.data.frame(dataframe)
+dataframe=dataframe[order(-dataframe$n),]
+
+plot4= head(dataframe,60) %>% ggplot(aes(x=Country, y=n,fill=Category)) +scale_x_discrete()+
+    geom_bar(stat="identity")+ xlab("Country") + ylab("Tweet counts")+ggtitle("country sentiment with time")+theme(axis.text.x=element_text(angle=45, hjust=1))
+
+
+plots=grid.arrange( plot1, plot2, plot3,plot4,plot5,nrow=5)
+print(plots)
+
+}
+
+
+```
+### Bi-gram functionality
+```{r, echo=FALSE,cache=TRUE}
+ ##### Bi-gram plot
+BigramTokenizer <-
+   function(x)
+     unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)
+
+   bigramwords<-function(df) {
+  df$Contents = gsub("[^a-zA-Z0-9 ]", "", df$Contents)
+    df$Contents= gsub("[[:digit:]]", "",df$Contents)
+    df$Contents= gsub("http\\w+", "", df$Contents)
+    df$Contents = gsub("\n", "", df$Contents)  
+    
+  wordco=Corpus(VectorSource(df$Contents)) %>% 
+     tm_map(content_transformer(tolower)) %>%
+     tm_map(removePunctuation) %>%
+     tm_map(stripWhitespace) %>% 
+     #tm_map(stemDocument) %>% 
+     tm_map(removeWords,stopwords("english")) %>%
+     tm_map(removeWords,
+            c("Ashley Madison","ashleymadison","madison","madisons","ashley","http","website",
+              "WWW","twitter"))
+ dtm <- DocumentTermMatrix(wordco,control =  list(tokenize = BigramTokenizer))
+#  taggedText(dtm)
+ freq <- sort(colSums(data.matrix(dtm)), decreasing=TRUE)
+ wof <- data.frame(word=names(freq), freq=freq)
+ return (wof)
+}
+
+
+bigramplot<-function(df)
+  {  
+df_Neutral=df[df$Category=="Basic Neutral",]
+df_Positive=df[df$Category=="Basic Positive",]
+df_Negative=df[df$Category=="Basic Negative",]
+  
+    
+bi_pos=bigramwords(df_Positive)
+bi_pos_top25=head(bi_pos,25)
+bi_pos_top25$Category="blue"
+
+bi_neg=bigramwords(df_Negative)
+bi_neg_top25=head(bi_neg,25)
+bi_neg_top25$Category="red"
+
+bi_neu=bigramwords(df_Neutral)
+bi_neu_top25=head(bi_neu,25)
+bi_neu_top25$Category="green"
+
+bi_df=rbind(bi_pos_top25,bi_neg_top25,bi_neu_top25)
+
+ggplot(aes(word, freq),data=bi_df)+
+geom_bar(stat="identity", fill=bi_df$Category, colour="blue")+
+theme(axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Bi-Gram Frequency") 
+
+}
+
+bigramwords_privacy<-function(df) {
+  df$Contents = gsub("[^a-zA-Z0-9 ]", "", df$Contents)
+    df$Contents= gsub("[[:digit:]]", "",df$Contents)
+    df$Contents= gsub("http\\w+", "", df$Contents)
+    df$Contents = gsub("\n", "", df$Contents)  
+    
+  wordco=Corpus(VectorSource(df$Contents)) %>% 
+     tm_map(content_transformer(tolower)) %>%
+     tm_map(removePunctuation) %>%
+     tm_map(stripWhitespace) %>% 
+     #tm_map(stemDocument) %>% 
+     tm_map(removeWords,stopwords("english")) %>%
+     tm_map(removeWords,
+            c("privacy","security","http","website",
+              "WWW","twitter"))
+ dtm <- DocumentTermMatrix(wordco,control =  list(tokenize = BigramTokenizer))
+#  taggedText(dtm)
+ freq <- sort(colSums(data.matrix(dtm)), decreasing=TRUE)
+ wof <- data.frame(word=names(freq), freq=freq)
+ return (wof)
+}
+
+ 
+bigramplot_privacy<-function(df){
+df_Neutral=df[df$Category=="Basic Neutral",]
+df_Positive=df[df$Category=="Basic Positive",]
+df_Negative=df[df$Category=="Basic Negative",]
+
+bi_pos=bigramwords_privacy(df_Positive)
+bi_pos_top25=head(bi_pos,25)
+bi_pos_top25$Category="blue"
+
+bi_neg=bigramwords_privacy(df_Negative)
+bi_neg_top25=head(bi_neg,25)
+bi_neg_top25$Category="red"
+
+bi_neu=bigramwords_privacy(df_Neutral)
+bi_neu_top25=head(bi_neu,25)
+bi_neu_top25$Category="green"
+
+bi_df=rbind(bi_pos_top25,bi_neg_top25,bi_neu_top25)
+
+ 
+ggplot(aes(word, freq),data=bi_df)+
+  geom_bar(stat="identity", fill=bi_df$Category, colour="blue")+
+ theme(axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Bi-Gram Frequency") 
+ 
+}
+
+```
+
+### different clusterings of words
+```{r,warning=FALSE,fig.width=12,fig.height=25, echo=FALSE,cache=TRUE}
+#### hierarchical clustering
+cluster_plots<-function(documents)
+  {
+    documents = gsub("[^a-zA-Z0-9 ]", "", documents)
+    documents= gsub("[[:digit:]]", "",documents)
+    documents= gsub("http\\w+", "", documents)
+    documents = gsub("\n", "", documents)  
+    wordcorpus <- Corpus(VectorSource(documents)) %>% 
+    tm_map(content_transformer(tolower)) %>%
+    #tm_map(stemDocument,language = "english") %>% 
+    tm_map(removePunctuation) %>%
+    tm_map(stripWhitespace) %>% 
+    tm_map(removeWords,stopwords("english")) %>%
+    tm_map(removeWords,
+           c("Ashley Madison","ashleymadison","madison","madisons","ashley","http","website","WWW","twitter")) %>%
+    DocumentTermMatrix() %>%
+    removeSparseTerms(sparse=0.975)%>%
+    as.matrix() %>%
+    as.data.frame()
+
+## Semantic clustering
+docterm.matrix=wordcorpus
+docterm.matrix.lsa <- na.omit(lw_bintf(docterm.matrix) * gw_idf(docterm.matrix)) 
+lsaSpace <- lsa(docterm.matrix.lsa)  # create LSA space
+dist.mat.lsa <- dist(t(as.textmatrix(lsaSpace)))  # compute distance matrix
+dist.mat.lsa  # check distance mantrix  
+
+
+clust.fit=hclust(as.dist(dist.mat.lsa),method="ward.D")
+plot1=ggdendrogram(clust.fit, rotate = FALSE, size = 4, theme_dendro = FALSE)+
+  theme(axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Lexical semantic cluster") 
+
+## Levenshtein distance between words clustering
+freq <- colSums(wordcorpus)
+freq <- sort(freq,decreasing = T)
+df_adist=names(head(freq,50))
+distmat=adist(df_adist)
+rownames(distmat)=df_adist
+clust.fit=hclust(as.dist(distmat))
+plot2=ggdendrogram(clust.fit, rotate = FALSE, size = 4, theme_dendro = FALSE)+
+   theme(axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Levenshtein distance cluster") 
+
+## Word freq based clustering
+freq <- colSums(wordcorpus)
+freq <- sort(freq,decreasing = T)
+df_data<- head(data.frame(freq),50)    
+#dim(df_data)    
+distmat=dist(scale(as.matrix(df_data)))
+clust.fit=hclust(distmat,method="ward.D")
+plot3=ggdendrogram(clust.fit, rotate = FALSE, size = 4, theme_dendro = FALSE)+
+   theme(axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Word freq based cluster") 
+plots=grid.arrange( plot1, plot2, plot3,nrow=3)
+print(plots)
+}
+```
+
+# Ashley Madison Incident Analysis
+### Privacy and Security tweets analysis during the Ashley Madison Incident.
+```{r,warning=FALSE,fig.width=12,fig.height=35,cache=TRUE}
+Privacy=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Privacy-Ash.csv",stringsAsFactors = FALSE)
+word_plot_Privacy(Privacy)
+#bigramplot_privacy(Privacy)
+
+```
+
+
+### Ashley Madison incident 60 days sentiment Analysis.
+```{r,warning=FALSE,fig.width=12,fig.height=35,cache=TRUE}
+Ash=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ashley10k.csv", stringsAsFactors = FALSE)
+word_plot(Ash)
+```
+
+```{rwarning=FALSE,fig.width=18,fig.height=12,cache=TRUE}
+bigramplot(Ash)
+```
+
+
+
+#### Ashley Madison Incident before 15 days  slot sentiment analysis.
+```{r,warning=FALSE,fig.width=12,fig.height=35,cache=TRUE}
+Ash1=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ash1.csv",stringsAsFactors = FALSE)
+word_plot(Ash1)
+```
+
+#### Ashley Madison Incident after 15 days  slot sentiment analysis.
+```{r,warning=FALSE,fig.width=12,fig.height=35,cache=TRUE}
+Ash2=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ash2.csv",stringsAsFactors = FALSE)
+word_plot(Ash2)
+
+```
+
+#### Ashley Madison Incident after 16-30 days slot  sentiment analysis.
+```{r,warning=FALSE,fig.width=12,fig.height=35,cache=TRUE}
+Ash3=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ash3.csv",stringsAsFactors = FALSE)
+word_plot(Ash3)
+
+```
+
+#### Ashley Madison Incident after 31-45 days slot sentiment analysis.
+```{r,warning=FALSE,fig.width=12,fig.height=35,cache=TRUE}
+Ash4=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ash4.csv",stringsAsFactors = FALSE)
+word_plot(Ash4)
+```
+
+#### Ashely Madison 60 days 10k tweets word cluster
+```{r,warning=FALSE,fig.width=12,fig.height=22,cache=TRUE}
+Ash=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ashley10k.csv", stringsAsFactors = FALSE)
+cluster_plots(Ash$Contents)
+```
+
+
+

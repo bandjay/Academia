@@ -1,0 +1,250 @@
+---
+title: "Word cloud for 15 days after the incident across categories"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,echo=FALSE}
+memory.limit(100000)
+library(ggplot2) # Data visualization
+library(ggdendro)
+library(readr) # CSV file I/O, e.g. the read_csv function
+library(tm) # Package for text mining
+library(SnowballC)
+library(wordcloud)
+library(dplyr)
+library(gridExtra)
+library(RColorBrewer) # Data Visualization
+library(openNLP)
+library(koRpus)
+library(Rstem)
+library(lsa)
+
+wcloud_Ashley <- function(documents){
+     documents = gsub("[^a-zA-Z0-9 ]", "", documents)
+    documents= gsub("[[:digit:]]", "",documents)
+    documents= gsub("http\\w+", "", documents)
+    documents = gsub("\n", "", documents)  
+    wordcorpus <- Corpus(VectorSource(documents)) %>% 
+    tm_map(content_transformer(tolower)) %>%
+    #tm_map(stemDocument,language = "english") %>% 
+    tm_map(removePunctuation) %>%
+    tm_map(stripWhitespace) %>% 
+    tm_map(removeWords,stopwords("english")) %>%
+    tm_map(removeWords,
+           c("Ashley Madison","ashleymadison","madison","madisons","ashley","http","website","hack","hacking","hackers","hacked","site","hacks",
+             "WWW","twitter")) %>%
+    DocumentTermMatrix() %>%
+    as.matrix() %>%
+    as.data.frame()
+  return(wordcorpus)
+} 
+wcloud_Snowden <- function(documents){
+     documents = gsub("[^a-zA-Z0-9 ]", "", documents)
+    documents= gsub("[[:digit:]]", "",documents)
+    documents= gsub("http\\w+", "", documents)
+    documents = gsub("\n", "", documents)  
+    wordcorpus <- Corpus(VectorSource(documents)) %>% 
+    tm_map(content_transformer(tolower)) %>%
+    #tm_map(stemDocument,language = "english") %>% 
+    tm_map(removePunctuation) %>%
+    tm_map(stripWhitespace) %>% 
+    tm_map(removeWords,stopwords("english")) %>%
+    tm_map(removeWords,
+           c("edward snowden","snowden","snowdens","hong","hero","kong","edward","http","website","nsa","cia",
+             "WWW","twitter")) %>%
+    DocumentTermMatrix() %>%
+    as.matrix() %>%
+    as.data.frame()
+  return(wordcorpus)
+} 
+
+wcloud_Celeb <- function(documents){
+     documents = gsub("[^a-zA-Z0-9 ]", "", documents)
+    documents= gsub("[[:digit:]]", "",documents)
+    documents= gsub("http\\w+", "", documents)
+    documents = gsub("\n", "", documents)  
+    wordcorpus <- Corpus(VectorSource(documents)) %>% 
+    tm_map(content_transformer(tolower)) %>%
+    #tm_map(stemDocument,language = "english") %>% 
+    tm_map(removePunctuation) %>%
+    tm_map(stripWhitespace) %>% 
+    tm_map(removeWords,stopwords("english")) %>%
+    tm_map(removeWords,
+           c("photo", "hack","celebrity", "nude","celeb","http","website",
+             "WWW","twitter","nudephoto","icloud","apple","fbi","hacking")) %>%
+    DocumentTermMatrix() %>%
+    as.matrix() %>%
+    as.data.frame()
+  return(wordcorpus)
+} 
+
+wcloud_Apple <- function(documents){
+     documents = gsub("[^a-zA-Z0-9 ]", "", documents)
+    documents= gsub("[[:digit:]]", "",documents)
+    documents= gsub("http\\w+", "", documents)
+    documents = gsub("\n", "", documents)  
+    wordcorpus <- Corpus(VectorSource(documents)) %>% 
+    tm_map(content_transformer(tolower)) %>%
+    #tm_map(stemDocument,language = "english") %>% 
+    tm_map(removePunctuation) %>%
+    tm_map(stripWhitespace) %>% 
+    tm_map(removeWords,stopwords("english")) %>%
+    tm_map(removeWords,
+           c("fbi","apple","encryption","fbiv.apple","fbivsapple","http","website",
+             "WWW","twitter","apples","says","iphone","appleencryptionfbi","appleremember","new","york","say","via","good")) %>%
+    DocumentTermMatrix() %>%
+    as.matrix() %>%
+    as.data.frame()
+  return(wordcorpus)
+} 
+
+
+Ash2=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ash2.csv",stringsAsFactors = FALSE)
+
+Ash2_Neutral=Ash2[Ash2$Category=="Basic Neutral",]
+Ash2_Positive=Ash2[Ash2$Category=="Basic Positive",]
+Ash2_Negative=Ash2[Ash2$Category=="Basic Negative",]
+
+Snow1=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Snowden/Snow1.csv",stringsAsFactors = FALSE)
+Snow2=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Snowden/Snow2.csv",stringsAsFactors = FALSE)
+Snow2=rbind(Snow1,Snow2)
+
+Snow2_Neutral=Snow2[Snow2$Category=="Basic Neutral",]
+Snow2_Positive=Snow2[Snow2$Category=="Basic Positive",]
+Snow2_Negative=Snow2[Snow2$Category=="Basic Negative",]
+
+Celeb2=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Celeb photo hack/Celeb2.csv", stringsAsFactors = FALSE)
+
+Celeb2_Neutral=Celeb2[Celeb2$Category=="Basic Neutral",]
+Celeb2_Positive=Celeb2[Celeb2$Category=="Basic Positive",]
+Celeb2_Negative=Celeb2[Celeb2$Category=="Basic Negative",]
+
+Apple2=read.csv("C:/Users/Jay/Desktop/Prof.Mike/FBI-APPLE/FBI-APPLE2.csv", stringsAsFactors = FALSE)
+
+Apple2_Neutral=Apple2[Apple2$Category=="Basic Neutral",]
+Apple2_Positive=Apple2[Apple2$Category=="Basic Positive",]
+Apple2_Negative=Apple2[Apple2$Category=="Basic Negative",]
+
+```
+## word cloud of Neutral words in Ashley madison incident
+```{r,echo=FALSE}
+df_clean <- wcloud_Ashley(Ash2_Neutral$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[50]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+```
+
+
+## word cloud of Positive words in Ashley madison incident
+```{r,echo=FALSE}
+df_clean <- wcloud_Ashley(Ash2_Positive$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[50]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+```
+
+
+## word cloud of Negative words in Ashley madison incident
+```{r,echo=FALSE}
+df_clean <- wcloud_Ashley(Ash2_Negative$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[50]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+```
+
+## word cloud of Neutral words in Edward Snowden incident
+```{r,echo=FALSE}
+df_clean <- wcloud_Snowden(Snow2_Neutral$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[50]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+```
+
+
+## word cloud of Positive words in Edward Snowden incident
+```{r,echo=FALSE}
+df_clean <- wcloud_Snowden(Snow2_Positive$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[50]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+```
+
+
+## word cloud of Negative words in Edward Snowden incident
+```{r,echo=FALSE}
+df_clean <- wcloud_Snowden(Snow2_Negative$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[50]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+```
+
+## word cloud of Neutral words in Celebrity Photo Hack incident
+```{r,echo=FALSE}
+df_clean <- wcloud_Celeb(Celeb2_Neutral$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[50]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+```
+
+
+## word cloud of Positive words in Celebrity Photo Hack incident
+```{r,echo=FALSE}
+
+df_clean <- wcloud_Celeb(Celeb2_Positive$Contents)
+ freq <- colSums(df_clean)
+ freq <- sort(freq,decreasing = T)
+ head(freq,50)
+ wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[length(freq)]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+# }
+```
+
+
+## word cloud of Negative words in Celebrity Photo Hack incident
+```{r,echo=FALSE}
+df_clean <- wcloud_Celeb(Celeb2_Negative$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[50]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+```
+
+
+## word cloud of Neutral words in FBI-APPLE incident
+```{r,echo=FALSE}
+df_clean <- wcloud_Apple(Apple2_Neutral$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[50]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+```
+
+
+## word cloud of Positive words in FBI-APPLE incident
+```{r,echo=FALSE}
+df_clean <- wcloud_Apple(Apple2_Positive$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[50]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+```
+
+
+## word cloud of Negative words in FBI-APPLE incident
+```{r,echo=FALSE}
+df_clean <- wcloud_Apple(Apple2_Negative$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[50]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+```

@@ -1,0 +1,396 @@
+---
+title: "Ashley Madison Incident sentiment analysis/Topic Prediction"
+author: 'JayaChandu Bandlamudi'
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##### Loading required Packages and Data
+
+```{r,warning=FALSE, echo=FALSE, cache=TRUE,}
+## loading required pacakges and Data
+library(ggplot2) # Data visualization
+library(ggdendro)
+library(readr) # CSV file I/O, e.g. the read_csv function
+library(tm) # Package for text mining
+library(SnowballC)
+library(wordcloud)
+library(dplyr)
+library(gridExtra)
+library(RColorBrewer) # Data Visualization
+library(openNLP)
+library(koRpus)
+library(Rstem)
+library(lsa)
+library(caret)
+
+```
+
+
+#### A total of 1000 tweets are sampled from each of the four 15-days slot and tweets are handlabelled into classes such as "secrect","security" and "other". 
+```{r,warning=FALSE,fig.width=12,fig.height=12,cache=TRUE,echo=FALSE}
+Ash1=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ash1.csv",stringsAsFactors = FALSE)
+Ash2=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ash2.csv",stringsAsFactors = FALSE)
+Ash3=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ash3.csv",stringsAsFactors = FALSE)
+Ash4=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Ashley Madison/Ash4.csv",stringsAsFactors = FALSE)
+#dim(Ash1)
+#dim(Ash2)
+#dim(Ash3)
+#dim(Ash4)
+Ash_sample=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Scripts/Ash_1000.csv",stringsAsFactors = FALSE)
+Ash=rbind(Ash1,Ash2,Ash3,Ash4)
+#dim(Ash_sample)
+#dim(Ash)
+ Ash$TweetID=1:nrow(Ash)
+ Ash_merge=left_join(Ash,Ash_sample,by="TweetID",copy=TRUE)
+ Ash$Topic=Ash_merge$Topic
+ Ash$Topic=tolower(Ash$Topic)
+ Ash_tagged=Ash[!is.na(Ash$Topic),]
+# dim(Ash_tagged)
+ Ash_untagged=Ash[is.na(Ash$Topic),]
+# dim(Ash_untagged)
+
+wcloud_Ashley <- function(documents){
+     documents = gsub("[^a-zA-Z0-9 ]", "", documents)
+    documents= gsub("[[:digit:]]", "",documents)
+    documents= gsub("http\\w+", "", documents)
+    documents = gsub("\n", "", documents)  
+    wordcorpus <- Corpus(VectorSource(documents)) %>% 
+    tm_map(content_transformer(tolower)) %>%
+    #tm_map(stemDocument,language = "english") %>% 
+    tm_map(removePunctuation) %>%
+    tm_map(stripWhitespace) %>% 
+    tm_map(removeWords,stopwords("english")) %>%
+    tm_map(removeWords,
+           c("Ashley Madison","ashleymadison","madison","madisons","ashley","http","website",
+             "WWW","twitter")) %>%
+    DocumentTermMatrix() %>%
+    removeSparseTerms(0.999) %>%
+    as.matrix() %>%
+    as.data.frame()
+  return(wordcorpus)
+}
+
+```
+
+#### Table for tweets counts across different categories VS topics.
+```{r,echo=FALSE}
+table(Ash_tagged$Topic,Ash_tagged$Category)
+```
+
+
+
+#### SVM-model for training dataset(1000 tweets) and predictions are made on the testing dataset.
+```{r,,warning=FALSE,fig.width=12,fig.height=12,cache=TRUE,echo=FALSE}
+#Ash_sample=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Scripts/sampledset.csv",stringsAsFactors = FALSE)
+ 
+df=wcloud_Ashley(Ash$Contents)
+#df$category=Ash_sample$category
+df$Topic=Ash$Topic
+#df$About_Privacy=Ash_tagged$About_Privacy
+#df$Category=Ash_tagged$Category
+#df$Gender=Ash_tagged$Gender
+#df$Klout_score=Ash_tagged$Klout.Score
+#df$isRT=Ash_tagged$isRT
+#date_and_time <- strptime(Ash_sample$Date, '%m/%d/%Y %H:%M')
+#df$Date <- as.Date( Ash_tagged$Date, '%m/%d/%Y')
+#df$Year <- as.numeric(format(date_and_time, '%Y'))
+#df$Month <- as.numeric(format(Ash_tagged$Date, '%m'))
+#df$Day <- as.numeric(format(Ash_tagged$Date, '%d'))
+#dim(df)
+train=df[!is.na(df$Topic),]
+dim(train)
+test=df[is.na(df$Topic),]
+dim(test)
+
+# library(rpart)
+# tree.mod=rpart(Topic~.,data=df_tr,method="class")
+# #summary(tree.mod)
+# #par(mfrow=c(2,1))
+# plot(tree.mod,main="Tree for categories")
+# text(tree.mod,cex = 0.75)
+# cat("train set predictions")
+# train_pred=predict(tree.mod,type="class")
+# confusionMatrix(train_pred,df_tr$Topic)
+# cat("test set predictions")
+# test_pred=predict(tree.mod,newdata=df_te,type="class")
+# confusionMatrix(test_pred,df_te$Topic)
+
+
+### XGboost model
+library(xgboost)
+ cvControl <- trainControl(method = "cv", number = 10, verbose = FALSE,classProbs = TRUE)
+ svmgrid<-expand.grid(C=c(2^seq(-6,6)),sigma=c(0.01,0.1,1,10))                          
+ # xgbGrid <-  expand.grid  (nrounds=c(1000), 
+ #                           max_depth=c(20), 
+ #                           eta=c(0.01),
+ #                           gamma= c(1.5),
+ #                           colsample_bytree=c(0.8),
+ #                           min_child_weight=c(1))
+ # 
+ # xgb_model <- train(Topic~.,
+ #                         data=df,
+ #                         method = "xgbTree",
+ #                         trControl = cvControl,
+ #                         verbose = TRUE,
+ #                         objective= "multi:softprob",
+ #                         metric= "merror",
+ #                         #maximize=FALSE,
+ #                         tuneGrid = xgbGrid)
+  svm_model <- train(Topic~.,
+                        data=train,
+                         method = "svmRadial",
+                         trControl = cvControl,
+                         verbose = FALSE,
+                         objective= "multi:softprob",
+                         metric= "merror",
+                         #maximize=FALSE,
+                         tuneGrid = svmgrid)
+# cat("train set predictions")
+ svm_model
+ train_pred=predict(svm_model,type="raw")
+ confusionMatrix(train_pred,train$Topic)
+ cat("test set predictions")
+ test_pred=predict(svm_model,newdata=test,type="raw")
+ table(test_pred)
+# length(test_pred)
+ Ash_untagged$Topic=test_pred
+ Ash_full=rbind(Ash_tagged,Ash_untagged)
+
+
+### Extracting Hashtags,@ and URLs into seperate columns.
+library(stringr)
+hashtag.regex <- regex("(?<=^|\\s)#\\S+")
+attag.regex<-regex("(?<=^|\\s)@\\S+")
+url.regex<-regex("http[^[:blank:]]+")
+Ash_full$Contents=tolower(Ash_full$Contents)
+hashtags <- str_extract_all(Ash_full$Contents, hashtag.regex)
+attags<-str_extract_all(Ash_full$Contents, attag.regex)
+urls<-str_extract_all(Ash_full$Contents, url.regex)
+rt_flag <- grepl("^RT",Ash_full$Contents, ignore.case=TRUE)
+Privacy_flag<-grepl("privacy",Ash_full$Contents, ignore.case=TRUE)
+Ash_full$hashtags<-as.character(hashtags)
+Ash_full$attags<-as.character(attags)
+Ash_full$urls<-as.character(urls)
+Ash_full$isRT<-as.character(rt_flag)
+Ash_full$About_Privacy<-as.character(Privacy_flag)
+write.csv(Ash_full,"Ash_full.csv",row.names = FALSE)
+```
+
+# Data Exploration
+
+#### Plot for tweetcounts across different categories,classes over time(60 days)
+```{r,warning=FALSE,fig.width=12,fig.height=12,cache=TRUE,echo=FALSE}
+Ash_full=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Scripts/Ash_full.csv",stringsAsFactors = FALSE)
+Ash_full$Date <- strptime(Ash_full$Date..CST., '%m/%d/%Y %H:%M')
+Ash_full$Date <- as.Date( Ash_full$Date, '%m/%d/%Y')
+detach("package:plyr", unload=TRUE) 
+gby=group_by(Ash_full,Date,Topic,Category)
+dataframe=summarise(gby,n = n())
+dataframe=as.data.frame(dataframe)
+number_ticks <- function(n) {function(limits) pretty(limits, n)}
+ggplot(dataframe,aes(x=Date, y=n, col=Category)) + geom_point(pch=16)+geom_line(size=1)+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Tweet Topic count with time")+facet_grid(Topic~.)+scale_x_date(format(dataframe$Date, '%m/%d'),breaks=number_ticks(30))+theme(axis.text.x=element_text(angle=60, hjust=1))+scale_y_continuous(breaks=number_ticks(15))
+```
+
+# Timeseries of tweet Topic for the 60-days
+```{r,warning=FALSE,fig.width=12,fig.height=12,cache=TRUE,echo=FALSE}
+detach("package:plyr", unload=TRUE) 
+gby=group_by(Ash_full,Date,Topic,Contents)
+dataframe=summarise(gby,n = n())
+dataframe=as.data.frame(dataframe)
+number_ticks <- function(n) {function(limits) pretty(limits, n)}
+ggplot(dataframe,aes(x=Date, y=n, fill=Topic)) + geom_bar(stat="identity",position = "dodge")+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Tweet Topic with time")+scale_x_date(format(dataframe$Date,'%m/%d'),breaks=number_ticks(30))+theme(axis.text.x=element_text(angle=60, hjust=1))+scale_y_continuous(breaks=number_ticks(15))
+```
+
+# Topic Tweet counts across  Male gender
+```{r,warning=FALSE,fig.width=12,fig.height=12,cache=TRUE,echo=FALSE}
+# Topic by gender
+detach("package:plyr", unload=TRUE)
+g=group_by(Ash_full,Gender,Topic,Category,Date)
+dataframe=summarise(g,n = n())
+dataframe=as.data.frame(dataframe)
+dfMale=dataframe[dataframe$Gender=="M",]
+dfFemale=dataframe[dataframe$Gender=="F",]
+#Male Topic graph
+ggplot(dfMale,aes(x=Date, y=n, col=Category) )+ geom_line(size=1)+geom_point()+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Male sentiment with time")+facet_grid(Topic~.)+scale_x_date(format(dataframe$Date, '%m/%d'),breaks=number_ticks(30))+theme(axis.text.x=element_text(angle=60, hjust=1))+scale_y_continuous(breaks=number_ticks(15))
+```
+
+
+
+# Topic Tweet counts across  FeMale gender
+```{r,warning=FALSE,fig.width=12,fig.height=12,cache=TRUE,echo=FALSE}
+detach("package:plyr", unload=TRUE)
+g=group_by(Ash_full,Gender,Topic,Category,Date)
+dataframe=summarise(g,n = n())
+dataframe=as.data.frame(dataframe)
+dfMale=dataframe[dataframe$Gender=="M",]
+dfFemale=dataframe[dataframe$Gender=="F",]
+#Female Topic graph
+ggplot(dfFemale,aes(x=Date, y=n, col=Category) )+ geom_line(size=1)+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Female sentiment with time")+facet_grid(Topic~.)+scale_x_date(format(dataframe$Date, '%m/%d'),breaks=number_ticks(30))+theme(axis.text.x=element_text(angle=60, hjust=1))+scale_y_continuous(breaks=number_ticks(15))+geom_point()
+
+```
+
+## wORD PLOT FOR SECURTITY RELATED TWEETS 
+```{r,warning=FALSE,fig.width=12,fig.height=12,cache=TRUE,echo=FALSE}
+##### word plot function
+word_plot<-function(df)
+{
+#names(df)
+#dim(df)
+
+df_Neutral=df[df$Category=="Basic Neutral",]
+df_Positive=df[df$Category=="Basic Positive",]
+df_Negative=df[df$Category=="Basic Negative",]
+
+df_Neutral_clean <- as.data.frame(wcloud_Ashley(df_Neutral$Contents))
+freq <- colSums(df_Neutral_clean)
+freq <- sort(freq,decreasing = T)
+df_Neutral_Top50 <-head(data.frame(word=names(freq), freq=freq),50)
+
+
+df_Positive_clean <- as.data.frame(wcloud_Ashley(df_Positive$Contents))
+freq <- colSums(df_Positive_clean)
+freq <- sort(freq,decreasing = T)
+df_Postive_Top50 <- head(data.frame(word=names(freq), freq=freq),50)
+
+df_Negative_clean <- as.data.frame(wcloud_Ashley(df_Negative$Contents))
+freq <- colSums(df_Negative_clean)
+freq <- sort(freq,decreasing = T)
+df_Negative_Top50 <- head(data.frame(word=names(freq), freq=freq),50)
+
+df_Postive_Top50$Category="blue"
+df_Negative_Top50$Category="red"
+df_Neutral_Top50$Category="green"
+
+df_words=rbind(df_Postive_Top50,df_Negative_Top50,df_Neutral_Top50)
+
+
+# #### pos TAGGING OF WORDS
+# s <- as.String(df_words$word)
+# 
+# ## Need sentence and word token annotations.
+# sent_token_annotator <- Maxent_Sent_Token_Annotator()
+# word_token_annotator <- Maxent_Word_Token_Annotator()
+# a2 <- annotate(s, list(sent_token_annotator, word_token_annotator))
+# 
+# pos_tag_annotator <- Maxent_POS_Tag_Annotator()
+# #pos_tag_annotator
+# a3 <- annotate(s, pos_tag_annotator, a2)
+# a3
+# ## Variant with POS tag probabilities as (additional) features.
+# #head(annotate(s, Maxent_POS_Tag_Annotator(probs = TRUE), a2))
+# 
+# ## Determine the distribution of POS tags for word tokens.
+# a3w <- subset(a3, type == "word")
+# tags <- sapply(a3w$features, `[[`, "POS")
+# df_words$tag=tags
+attach(df_words)
+#df_words=df_words[tag=='JJ' | tag== 'JJS' | tag== 'NN' | tag=='NNS',]
+### unigram plot
+ggplot(aes(word, freq),data=df_words)+geom_bar(stat="identity",fill=df_words$Category,position = "stack")+theme(axis.text.x=element_text(angle=75, hjust=1))+ggtitle("Words and category plot")
+}
+
+## security topic category of tweets
+Ash_security=Ash_full[Ash_full$Topic=="security",]
+dim(Ash_security)
+word_plot(Ash_security)
+```
+
+## WORD PLOT FOR SECRET RELATED TWEETS 
+```{r,warning=FALSE,fig.width=12,fig.height=12,cache=TRUE,echo=FALSE}
+## secret topic category of tweets
+Ash_secret=Ash_full[Ash_full$Topic=="secret",]
+dim(Ash_secret)
+word_plot(Ash_secret)
+
+```
+
+## Word comparisons between secret and security realted tweets
+```{r,warning=FALSE,fig.width=12,fig.height=12,cache=TRUE,echo=FALSE}
+Ash_security=Ash_full[Ash_full$Topic=="security",]
+df_clean <- wcloud_Ashley(Ash_security$Contents)
+freq_security <- colSums(df_clean)
+freq_security <- sort(freq_security,decreasing = T)
+freq<-freq_security
+words=names(freq_security)
+security_words=as.data.frame(cbind(words,freq,rep("security",length(words))))
+names(security_words)=c("words","freq","Topic")
+Ash_secret=Ash_full[Ash_full$Topic=="secret",]
+df_clean <- wcloud_Ashley(Ash_secret$Contents)
+freq_secret <- colSums(df_clean)
+freq_secret <- sort(freq_secret,decreasing = T)
+freq<-freq_secret
+words=names(freq_secret)
+secret_words=as.data.frame(cbind(words,freq,rep("secret",length(words))))
+names(secret_words)=c("words","freq","Topic")
+word_100=merge(head(secret_words,100),head(security_words,100),by="words") # merging the top 100 from both categories of tweets
+word_100$freq.x=as.numeric(as.character(word_100$freq.x))
+word_100$freq.y=as.numeric(as.character(word_100$freq.y))
+cols <- c("Secret"="#f04546","Security"="#3591d1")
+ggplot(word_100)+geom_bar(aes(x=words,y=freq.x,col="Secret"),stat="identity",width=0.25)+geom_point(aes(x=words,y=freq.y,col="Security",size=0.1))+scale_y_continuous(breaks=number_ticks(15))+coord_flip()
+
+```
+
+## Word comparisons between Positive and Negative sentiment tweets.
+```{r}
+Ash_Neg=Ash_full[Ash_full$Category=="Basic Negative",]
+df_clean <- wcloud_Ashley(Ash_Neg$Contents)
+freq_Neg <- colSums(df_clean)
+freq_Neg <- sort(freq_Neg,decreasing = T)
+freq<-freq_Neg
+words=names(freq_Neg)
+Neg_words=as.data.frame(cbind(words,freq,rep("Neg",length(words))))
+names(Neg_words)=c("words","freq","Topic")
+Ash_Pos=Ash_full[Ash_full$Category=="Basic Positive",]
+df_clean <- wcloud_Ashley(Ash_Pos$Contents)
+freq_Pos <- colSums(df_clean)
+freq_Pos <- sort(freq_Pos,decreasing = T)
+freq<-freq_Pos
+words=names(freq_Pos)
+Pos_words=as.data.frame(cbind(words,freq,rep("Pos",length(words))))
+names(Pos_words)=c("words","freq","Topic")
+word_100=merge(head(Pos_words,100),head(Neg_words,100),by="words")# merging the top 100 from both categories of tweets
+word_100$freq.x=as.numeric(as.character(word_100$freq.x))
+word_100$freq.y=as.numeric(as.character(word_100$freq.y))
+cols <- c("Positive"="#f04546","Negative"="#3591d1")
+ggplot(word_100)+geom_bar(aes(x=words,y=freq.x,col="Positive"),stat="identity",width=0.25)+geom_point(aes(x=words,y=freq.y,col="Negative",size=0.1))+scale_y_continuous(breaks=number_ticks(15))+coord_flip()
+
+          
+```
+
+## sentiment distribution
+```{r}
+Ash_full=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Scripts/Ash_full.csv",stringsAsFactors = FALSE)
+Ash_full$Date <- strptime(Ash_full$Date..CST., '%m/%d/%Y %H:%M')
+Ash_full$Date <- as.Date( Ash_full$Date, '%m/%d/%Y')
+detach("package:plyr", unload=TRUE) 
+gby=group_by(Ash_full,Date,Category)
+dataframe=summarise(gby,n = n())
+dataframe=as.data.frame(dataframe)
+ggplot(dataframe,aes(x=Date, y=n, col=Category)) + geom_point(pch=16)+geom_line(size=1)+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Tweet Topic count with time")+scale_x_date(format(dataframe$Date, '%m/%d'),breaks=number_ticks(30))+theme(axis.text.x=element_text(angle=60, hjust=1))+scale_y_continuous(breaks=number_ticks(15))
+
+Neg_sent=dataframe[dataframe$Category=="Basic Negative",]
+Neg_sent$n=Neg_sent$n/sum(Neg_sent$n)
+Neg_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="red")
+Pos_sent=dataframe[dataframe$Category=="Basic Positive",]
+Pos_sent$n=Pos_sent$n/sum(Pos_sent$n)
+Pos_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="green")
+Neu_sent=dataframe[dataframe$Category=="Basic Neutral",]
+Neu_sent$n=Neu_sent$n/sum(Neu_sent$n)
+Neu_sent%>%ggplot(aes(n))+geom_histogram(bins = 50,fill="blue")
+Pos_sent_prob <- sample(Pos_sent$n, length(Neu_sent$n), 1)
+Neg_sent_prob <- sample(Neg_sent$n, length(Neu_sent$n), 1)
+Neu_sent_prob <- sample(Neu_sent$n, length(Neu_sent$n), 1)
+
+kl_metric_pos=sum(Pos_sent_prob*log(Pos_sent_prob/Neu_sent_prob,base = exp(1)))
+kl_metric_neg=sum(Neg_sent_prob*log(Neg_sent_prob/Neu_sent_prob,base = exp(1)))
+
+## Perform chi square test for different time slots and report results
+
+```
+
+
+

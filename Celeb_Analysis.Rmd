@@ -1,0 +1,158 @@
+---
+title: "Celebrity photo hack Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### A total of 1000 tweets are sampled from each of the four 15-days slot and tweets are handlabelled into classes such as "secrect","security" and "other". 
+```{r,warning=FALSE,fig.width=12,fig.height=12,cache=TRUE,echo=FALSE}
+Celeb1=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Celeb photo hack/Celeb1.csv",stringsAsFactors = FALSE)
+Celeb2=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Celeb photo hack/Celeb2.csv",stringsAsFactors = FALSE)
+Celeb3=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Celeb photo hack/Celeb3.csv",stringsAsFactors = FALSE)
+Celeb4=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Celeb photo hack/Celeb4.csv",stringsAsFactors = FALSE)
+#dim(Celeb1)
+#dim(Celeb2)
+#dim(Celeb3)
+#dim(Celeb4)
+Celeb_sample=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Scripts/Celeb_1000.csv",stringsAsFactors = FALSE)
+Celeb=rbind(Celeb1,Celeb2,Celeb3,Celeb4)
+#dim(Celeb_sample)
+#dim(Celeb)
+ Celeb$TweetID=1:nrow(Celeb)
+ Celeb_merge=left_join(Celeb,Celeb_sample,by="TweetID",copy=TRUE)
+ Celeb$Topic=Celeb_merge$Topic
+ Celeb$Topic=tolower(Celeb$Topic)
+ Celeb_tagged=Celeb[!is.na(Celeb$Topic),]
+# dim(Celeb_tagged)
+ Celeb_untagged=Celeb[is.na(Celeb$Topic),]
+# dim(Celeb_untagged)
+
+wcloud_Celeb <- function(documents){
+     documents = gsub("[^a-zA-Z0-9 ]", "", documents)
+    documents= gsub("[[:digit:]]", "",documents)
+    documents= gsub("http\\w+", "", documents)
+    documents = gsub("\n", "", documents)  
+    wordcorpus <- Corpus(VectorSource(documents)) %>% 
+    tm_map(content_transformer(tolower)) %>%
+    #tm_map(stemDocument,language = "english") %>% 
+    tm_map(removePunctuation) %>%
+    tm_map(stripWhitespace) %>% 
+    tm_map(removeWords,stopwords("english")) %>%
+    tm_map(removeWords,
+           c("celebrity photo hack","photo hack","celebrity","hack","http","website",
+             "WWW","twitter")) %>%
+    DocumentTermMatrix() %>%
+    removeSparseTerms(0.999) %>%
+    as.matrix() %>%
+    as.data.frame()
+  return(wordcorpus)
+}
+
+```
+
+#### Table for tweets counts across different categories VS topics.
+```{r,echo=FALSE}
+table(Celeb_tagged$Topic,Celeb_tagged$Category)
+```
+
+
+
+#### SVM-model for training dataset(1000 tweets) and predictions are made on the testing dataset.
+```{r,,warning=FALSE,fig.width=12,fig.height=12,cache=TRUE,echo=FALSE}
+#Celeb_sample=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Scripts/sampledset.csv",stringsAsFactors = FALSE)
+ 
+df=wcloud_Celeb(Celeb$Contents)
+#df$category=Celeb_sample$category
+df$Topic=Celeb$Topic
+#df$About_Privacy=Celeb_tagged$About_Privacy
+#df$Category=Celeb_tagged$Category
+#df$Gender=Celeb_tagged$Gender
+#df$Klout_score=Celeb_tagged$Klout.Score
+#df$isRT=Celeb_tagged$isRT
+#date_and_time <- strptime(Celeb_sample$Date, '%m/%d/%Y %H:%M')
+#df$Date <- as.Date( Celeb_tagged$Date, '%m/%d/%Y')
+#df$Year <- as.numeric(format(date_and_time, '%Y'))
+#df$Month <- as.numeric(format(Celeb_tagged$Date, '%m'))
+#df$Day <- as.numeric(format(Celeb_tagged$Date, '%d'))
+#dim(df)
+train=df[!is.na(df$Topic),]
+dim(train)
+test=df[is.na(df$Topic),]
+dim(test)
+
+# library(rpart)
+# tree.mod=rpart(Topic~.,data=df_tr,method="class")
+# #summary(tree.mod)
+# #par(mfrow=c(2,1))
+# plot(tree.mod,main="Tree for categories")
+# text(tree.mod,cex = 0.75)
+# cat("train set predictions")
+# train_pred=predict(tree.mod,type="class")
+# confusionMatrix(train_pred,df_tr$Topic)
+# cat("test set predictions")
+# test_pred=predict(tree.mod,newdata=df_te,type="class")
+# confusionMatrix(test_pred,df_te$Topic)
+
+
+### XGboost model
+library(xgboost)
+ cvControl <- trainControl(method = "cv", number = 10, verbose = FALSE,classProbs = TRUE)
+ svmgrid<-expand.grid(C=c(2^seq(-6,6)),sigma=c(0.01,0.1,1,10))                          
+  xgbGrid <-  expand.grid  (nrounds=c(1000), 
+                            max_depth=c(20), 
+                            eta=c(0.01),
+                            gamma= c(1.5),
+                            colsample_bytree=c(0.8),
+                            min_child_weight=c(1))
+  
+  xgb_model <- train(Topic~.,
+                          data=df,
+                          method = "xgbTree",
+                          trControl = cvControl,
+                          verbose = TRUE,
+                          objective= "multi:softprob",
+                          metric= "merror",
+                          #maximize=FALSE,
+                          tuneGrid = xgbGrid)
+  svm_model <- train(Topic~.,
+                        data=train,
+                         method = "svmRadial",
+                         trControl = cvControl,
+                         verbose = FALSE,
+                         objective= "multi:softprob",
+                         metric= "merror",
+                         #maximize=FALSE,
+                         tuneGrid = svmgrid)
+# cat("train set predictions")
+ svm_model
+ train_pred=predict(svm_model,type="raw")
+ confusionMatrix(train_pred,train$Topic)
+ cat("test set predictions")
+ test_pred=predict(svm_model,newdata=test,type="raw")
+ table(test_pred)
+# length(test_pred)
+ Celeb_untagged$Topic=test_pred
+ Celeb_full=rbind(Celeb_tagged,Celeb_untagged)
+
+
+### Extracting Hashtags,@ and URLs into seperate columns.
+library(stringr)
+hashtag.regex <- regex("(?<=^|\\s)#\\S+")
+attag.regex<-regex("(?<=^|\\s)@\\S+")
+url.regex<-regex("http[^[:blank:]]+")
+Ash_full$Contents=tolower(Ash_full$Contents)
+hashtags <- str_extract_all(Ash_full$Contents, hashtag.regex)
+attags<-str_extract_all(Ash_full$Contents, attag.regex)
+urls<-str_extract_all(Ash_full$Contents, url.regex)
+rt_flag <- grepl("^RT",Ash_full$Contents, ignore.case=TRUE)
+Privacy_flag<-grepl("privacy",Ash_full$Contents, ignore.case=TRUE)
+Ash_full$hashtags<-as.character(hashtags)
+Ash_full$attags<-as.character(attags)
+Ash_full$urls<-as.character(urls)
+Ash_full$isRT<-as.character(rt_flag)
+Ash_full$About_Privacy<-as.character(Privacy_flag)
+write.csv(Ash_full,"Ash_full.csv",row.names = FALSE)
+```
