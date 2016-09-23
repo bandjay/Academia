@@ -4,26 +4,6 @@ Sys.setenv(NYTIMES_AS_KEY = "4e7c325c6f1d44849eff1dbe583e265c")
 Date="2016/01/01"
 Date <- as.Date(Date, '%Y/%m/%d')
 #gsub("-","",Date)
-Date_mat=matrix(NA,10,nrow=7)
-for (i in 1:2)
-{
-  for (j in 1:7)
-  {
-    
-    for (k in 1:10)
-    {
-     x<- sample(1:52, 20, replace=F)
-     Date_mat[j,k]=format(Date+(x[k]*7), format="%Y/%m/%d")
-    }
-    Date=Date+1
-  }
-  Date=Date+(365*i)
-}
-
-articles=as_search(q="immigration", begin_date ="20160101" , end_date = "20160131",page = 1,
-                   fl="web_url,snippet,lead_paragraph,abstract,headline,source,document_type,word_count",
-                   facet_field="section_name,type_of_material",hl=TRUE)
-begin_date ="20160101"
 date=c(rep(NA,10))
 web_url=c(rep(NA,10))
 snippet=rep(NA,10)
@@ -34,6 +14,23 @@ document_type=rep(NA,10)
 word_count=rep(NA,10)
 section_name=rep(NA,10)
 type_of_material=rep(NA,10)
+
+Date_mat=matrix(NA,10,nrow=7)
+  for (j in 1:7)
+  {
+    
+    for (k in 1:10)
+    {
+     x<- sample(1:52, 20, replace=F)
+     Date_mat[j,k]=format(Date+(x[k]*7), format="%Y/%m/%d")
+    }
+    Date=Date+1
+  }
+
+
+articles=as_search(q="immigration", begin_date ="20160101" , end_date = "20160131",page = 1,
+                   fl="web_url,snippet,lead_paragraph,abstract,headline,source,document_type,word_count",
+                   facet_field="section_name,type_of_material",hl=TRUE)
 for (i in 1:10)
 {
   date[i]=begin_date
