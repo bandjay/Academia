@@ -1,0 +1,17 @@
+base
+ggplot2
+ggdendro
+readr
+NLP
+tm
+SnowballC
+RColorBrewer
+wordcloud
+dplyr
+gridExtra
+openNLP
+koRpus
+Rstem
+lsa
+lattice
+caret

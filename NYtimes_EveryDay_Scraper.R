@@ -1,8 +1,9 @@
 library(rtimes)
-Sys.setenv(NYTIMES_AS_KEY = "4e7c325c6f1d44849eff1dbe583e265c")
-setwd("C:/Users/Jay/Desktop/Prof.Mike/ArticleDB/1991")
-Date="1991/01/01"
-Date <- as.Date(Date, '%Y/%m/%d')
+library(dplyr)
+Sys.setenv(NYTIMES_AS_KEY ="b9f3de20671f4c0cbeb36dbb04a815b9")
+setwd("C:/Users/Jay/Desktop/Prof.Mike/ArticleDB/2008")
+Date="2008/01/01"
+Date <- as.Date(Date, '%y/%m/%d')
 #today=gsub("[-/]","",Date)
 date=c(rep(NA,10))
 web_url=c(rep(NA,10))
@@ -14,13 +15,17 @@ document_type=rep(NA,10)
 word_count=rep(NA,10)
 section_name=rep(NA,10)
 type_of_material=rep(NA,10)
+articles_dataset=as.data.frame(cbind(date,web_url,snippet,lead_paragraph,abstract,headline,document_type,word_count,section_name,type_of_material))
+articles_dataset=articles_dataset[0,]
+full_dataset=as.data.frame(cbind(date,web_url,snippet,lead_paragraph,abstract,headline,document_type,word_count,section_name,type_of_material))
+full_dataset=articles_dataset[0,]
 #Date_mat=rep(0,20)
 for (k in 1:365)
 {
   today=gsub("[-/]","",Date)
-  for (j in 0:10)
+  for (j in 0:20)
   {
-    articles=as_search(q="immigration immigrant", begin_date =today , end_date = today,page = j,
+    articles=as_search(q="immigration", begin_date =today , end_date = today,page = j,
                        fl="web_url,snippet,lead_paragraph,abstract,headline,source,document_type,word_count",
                        facet_field="section_name,type_of_material",hl=TRUE)
     for (i in 1:10)
@@ -40,10 +45,11 @@ for (k in 1:365)
         },silent = TRUE)
          dataset=as.data.frame(cbind(date,web_url,snippet,lead_paragraph,abstract,headline,document_type,word_count,section_name,type_of_material))
     }
-    write.csv(dataset,file=paste0(today,'page',j,'.csv'), row.names=FALSE)
-    
+    articles_dataset=rbind(articles_dataset,dataset) 
   }
  Date=Date+1 
+ #full_dataset=rbind(full_dataset,articles_dataset)
+ articles_dataset=distinct(articles_dataset)
+ write.csv(articles_dataset,file=(today,'data.csv'), row.names=FALSE)
+ articles_dataset=articles_dataset[0,]
 }
-  
-

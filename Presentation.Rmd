@@ -1,0 +1,344 @@
+---
+title: "Analysis of Secrecy VS Security in social context"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##### Software tools used : R,Tableau,Text mining tools.
+#### The objective is to analyse the public sentiment about Privacy and Secrecy, and find a demacration between privacy and secrecy in a social context. For this study we consider four major incidents
+###### 1. "Ashley Madison incident"
+###### 2. "Celebrity photo hack incident"
+###### 3. "Edward snowden incident"
+###### 4. "FBI VS APPLE encryption incident"
+## Data Extraction:
+##### In order to perform analysis we extracted social media data from Twitter(tweets) using the Crimson hexagon platform. This platform has lot of data(millions of tweets) so we took a sample of tweets for each of these incidents and the sampling is done based on certain keywords, incident triggered date. For example in case of Ashley Madison incident keywords used are  "The Ashely Madison Hack" OR "Ashley Madison" OR site: "ashleymadison.com" and for each of the four different incidents, four data samples are obtained based on the 15-day slots based on the event triggered date (before 15 days, first 15 days, after 16-30 days,31-45 days).
+##### The below table shows the dimensions of samples for each of the incidents.
+## Data Description:
+##### Once we obatin four samples for each incident we can combine them and make it one sample,which has data for 60-days.The data extracted from Crimson hexagon has several useful variables for analysis, and the schema is below.
+##### "GUID","Date","URL", "Contents","Author","Name","Country","State/Region","City/Urban Area","Category","Source","Klout Score","Gender","Posts","Followers" and "Following" are the variables/columns in the data.
+##### Among all of these variables we are more interested in the "Date","Contents" (Raw tweets),"Country","Category"(Sentiment: Positive/Negative/Neutral),"Gender" variables and  the "Category" variable is coded by the 'Crimson Hexagon' platform.
+## Data Exploration:
+##### By now we have the raw data and it has several variables ,one of them is "Contents" which refers the actual tweet.We know that each tweet has several words and is there any way to associate the words of tweet to the sentiment(Poistive/Negative/Neutral).Below are the plots that can dymistify some of the patterns.
+##### We consider Ashley madison incident for the plots below ans the same procedure can be repliacted for other incidents.
+
+##### plot for the tweet counts for different categories for the 60-days.
+
+```{r,,warning=FALSE,fig.width=8,fig.height=8,cache=TRUE,echo=FALSE}
+library(ggplot2) # Data visualization
+library(ggdendro)
+library(readr) # CSV file I/O, e.g. the read_csv function
+library(tm) # Package for text mining
+library(SnowballC)
+library(wordcloud)
+library(dplyr)
+library(gridExtra)
+library(RColorBrewer) # Data Visualization
+library(openNLP)
+library(koRpus)
+library(Rstem)
+library(lsa)
+library(caret)
+Ash_full=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Scripts/Ash_full.csv",stringsAsFactors = FALSE)
+Ash_full$Date <- strptime(Ash_full$Date..CST., '%m/%d/%Y %H:%M')
+Ash_full$Date <- as.Date( Ash_full$Date, '%m/%d/%Y')
+gby=group_by(Ash_full,Date,Category)
+dataframe=summarise(gby,n = n())
+dataframe=as.data.frame(dataframe)
+number_ticks <- function(n) {function(limits) pretty(limits, n)}
+ggplot(dataframe,aes(x=Date, y=n, col=Category)) + geom_point(pch=16)+geom_line(size=1)+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Tweet Category count with time")+scale_x_date(format(dataframe$Date, '%m/%d'),breaks=number_ticks(30))+theme(axis.text.x=element_text(angle=60, hjust=1))+scale_y_continuous(breaks=number_ticks(15))
+```
+
+##### We can do similar plot as above for different  "Gender"
+
+```{r,,warning=FALSE,fig.width=7,fig.height=7,cache=TRUE,echo=FALSE}
+Ash_full=read.csv("C:/Users/Jay/Desktop/Prof.Mike/Scripts/Ash_full.csv",stringsAsFactors = FALSE)
+Ash_full$Date <- strptime(Ash_full$Date..CST., '%m/%d/%Y %H:%M')
+Ash_full$Date <- as.Date( Ash_full$Date, '%m/%d/%Y')
+gby=group_by(Ash_full,Date,Gender,Category)
+dataframe=summarise(gby,n = n())
+dataframe=as.data.frame(dataframe)
+number_ticks <- function(n) {function(limits) pretty(limits, n)}
+ggplot(dataframe,aes(x=Date, y=n, col=Category)) + geom_point(pch=16)+geom_line(size=1)+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Tweet Category count with time across Gender")+facet_grid(Topic~.)+scale_x_date(format(dataframe$Date, '%m/%d'),breaks=number_ticks(30))+theme(axis.text.x=element_text(angle=60, hjust=1))+scale_y_continuous(breaks=number_ticks(15))+facet_grid(Gender~.)
+
+```
+
+##### In the above plot we can see three different subplots one for each Gender 'F','M' and missing Gender.
+##### In a similar way we can explore the tweet counts across "Country","Region","City" etc. And we can move on to actual words in the tweets and what interesting things they reveal!
+
+```{r,warning=FALSE,fig.width=8,fig.height=7,cache=TRUE,echo=FALSE}
+wcloud_Ashley <- function(documents){
+  documents = gsub("[^a-zA-Z0-9 ]", "", documents)
+  documents= gsub("[[:digit:]]", "",documents)
+  documents= gsub("http\\w+", "", documents)
+  documents = gsub("\n", "", documents)  
+  wordcorpus <- Corpus(VectorSource(documents)) %>% 
+    tm_map(content_transformer(tolower)) %>%
+    #tm_map(stemDocument,language = "english") %>% 
+    tm_map(removePunctuation) %>%
+    tm_map(stripWhitespace) %>% 
+    tm_map(removeWords,stopwords("english")) %>%
+    tm_map(removeWords,
+           c("Ashley Madison","ashleymadison","madison","madisons","ashley","http","website",
+             "WWW","twitter")) %>%
+    DocumentTermMatrix() %>%
+    removeSparseTerms(0.999) %>%
+    as.matrix() %>%
+    as.data.frame()
+  return(wordcorpus)
+}
+
+
+word_plot<-function(df)
+{
+  #names(df)
+  #dim(df)
+  
+  df_Neutral=df[df$Category=="Basic Neutral",]
+  df_Positive=df[df$Category=="Basic Positive",]
+  df_Negative=df[df$Category=="Basic Negative",]
+  
+  df_Neutral_clean <- as.data.frame(wcloud_Ashley(df_Neutral$Contents))
+  freq <- colSums(df_Neutral_clean)
+  freq <- sort(freq,decreasing = T)
+  df_Neutral_Top50 <-head(data.frame(word=names(freq), freq=freq),25)
+  
+  
+  df_Positive_clean <- as.data.frame(wcloud_Ashley(df_Positive$Contents))
+  freq <- colSums(df_Positive_clean)
+  freq <- sort(freq,decreasing = T)
+  df_Postive_Top50 <- head(data.frame(word=names(freq), freq=freq),25)
+  
+  df_Negative_clean <- as.data.frame(wcloud_Ashley(df_Negative$Contents))
+  freq <- colSums(df_Negative_clean)
+  freq <- sort(freq,decreasing = T)
+  df_Negative_Top50 <- head(data.frame(word=names(freq), freq=freq),25)
+  
+  df_Postive_Top50$Category="green"
+  df_Negative_Top50$Category="red"
+  df_Neutral_Top50$Category="blue"
+  
+  df_words=rbind(df_Postive_Top50,df_Negative_Top50,df_Neutral_Top50)
+  
+  attach(df_words)
+  #df_words=df_words[tag=='JJ' | tag== 'JJS' | tag== 'NN' | tag=='NNS',]
+  ### unigram plot
+  ggplot(aes(word, freq),data=df_words)+geom_bar(stat="identity",fill=df_words$Category,position = "stack")+theme(axis.text.x=element_text(angle=75, hjust=1))+ggtitle("Words and category plot")
+}
+
+## security topic category of tweets
+word_plot(Ash_full)
+
+```
+
+##### In the plot we have top-25 most frequent words for each category i.e: Green refers Positive , Red refers Negative, Blue refers Neutral sentiment. By observing the plot we can likely to infer the sentiment of a particular tweet based on the words it has!
+
+##### We can formulate the question such that, is it possible to get the sentiment of a tweet based on the occurance of a particular word?, the plot below compares the frequencies of some of the common words that are present in both Positive/Negative sentiment tweets.
+
+
+```{r,warning=FALSE,fig.width=8,fig.height=7,cache=TRUE,echo=FALSE}
+Ash_Neg=Ash_full[Ash_full$Category=="Basic Negative",]
+df_clean <- wcloud_Ashley(Ash_Neg$Contents)
+freq_Neg <- colSums(df_clean)
+freq_Neg <- sort(freq_Neg,decreasing = T)
+freq<-freq_Neg
+words=names(freq_Neg)
+Neg_words=as.data.frame(cbind(words,freq,rep("Neg",length(words))))
+names(Neg_words)=c("words","freq","Topic")
+Ash_Pos=Ash_full[Ash_full$Category=="Basic Positive",]
+df_clean <- wcloud_Ashley(Ash_Pos$Contents)
+freq_Pos <- colSums(df_clean)
+freq_Pos <- sort(freq_Pos,decreasing = T)
+freq<-freq_Pos
+words=names(freq_Pos)
+Pos_words=as.data.frame(cbind(words,freq,rep("Pos",length(words))))
+names(Pos_words)=c("words","freq","Topic")
+word_100=merge(head(Pos_words,100),head(Neg_words,100),by="words")# merging the top 100 from both categories of tweets
+word_100$freq.x=as.numeric(as.character(word_100$freq.x))
+word_100$freq.y=as.numeric(as.character(word_100$freq.y))
+cols <- c("Positive"="#f04546","Negative"="#3591d1")
+ggplot(word_100)+geom_bar(aes(x=words,y=freq.x,col="Positive"),stat="identity",width=0.25)+geom_point(aes(x=words,y=freq.y,col="Negative",size=0.1))+scale_y_continuous(breaks=number_ticks(15))+coord_flip()+xlab("word frequncy")+ggtitle("word vs word-frequency comparison w.r.to Sentiment ")
+```
+
+##### From the plot above Red refers Negative,Blue refers Positive and we can infer the sentiment based on the frequency ,for example consider the word "hack" and we see that it has bigger frequncy in Negative context than Postive context.
+
+
+## Coding the Topic(Secret/Secuirty):
+
+##### To this point our focus is on analyzing sentiment of the tweets and this research purpose is to code evrey tweet with a Topic (Secret/Security/Other), so we create a new variable "Topic".since we have tweets of multiple thousands to be coded it's better to model/train using Machine Learning algorithm for the labelling process on a chunk of tweets(1000 sampled tweets) which are handcoded(manual Topic coding).And let the trained model predict the "Topic" for the rest of the dataset. 
+
+##### For the Topic prediction we used SVM(support vector machines) algorithm,it is a supervised machine learning algorithm and input to this algorithm will be words from the tweets and output will be "Topic" and technical details are below.
+
+### SVM Model Training:
+##### "In order to train Machine Learning model for predicting the relevant "TOPIC" we make use of "Contents" column in the dataset i.e; raw tweets. And the tweets from the users are untidy for analysis like they include special characters/symbols,un-wanted spaces,case discrepancies etc. as well as the tweets need to be split into one gram words to form a 'Document Term Matrix' for modeling purposes. The 'Document Term Matrix' is a matrix where rows represent the individual tweets and columns are one gram words with word frequency as matrix values. This task of creating   'Document Term Matrix'  is achieved with the "tm"(text mining) package  in R and it has several built in functions for data cleansing like tm_tolower(),tm_stripwhitespaces() etc. There is a point to be noted here,  'Document Term Matrix'   is a sparse matrix because the columns are words ,there will be thousands of words from tweets and the rows are for individual tweets , a single tweet can't have all the words(column names) so most of the  matrix will be filled with '0' word frequencies. To handle the sparsity in the data we can use 'removeSparseTerms()' a R function by specifying a limiting value.And as a final step we need to column bind the target variable 'Topic' to the 'Document Term Matrix' so that we have a cleaned dataset for modeling task with column 'Topic'  as 'dependent variable' and remaining columns as 'independent variables'".
+
+##### SVM is a state of the art algorithm for prediction and it performed well on interms of accuracy.It has achieved ~80% accuracy in the predicting Topic for the Ashley Madison incident, and ~95% accuracy for the Celebrity photo hack incident.Topic coding Work is in progress for Edward snowden and FBI-APPLE encryption incidents.
+
+##### Now we have Topic coded data sets for Ashley Madison ,Celebrity photo hack incidents, so we can explore the data in the research direction i.e: analysing the Topic w.r.to Several other variables like Date,Category,Gender etc.
+
+## Exploration of Topic coded data:
+##### Lets explore the with newly created Topic variable by using plots.
+
+
+##### Plot for tweet counts for Topic w.r.to Category for the 60-days.
+
+```{r,warning=FALSE,fig.width=10,fig.height=9,cache=TRUE,echo=FALSE}
+gby=group_by(Ash_full,Date,Topic,Category)
+dataframe=summarise(gby,n = n())
+dataframe=as.data.frame(dataframe)
+number_ticks <- function(n) {function(limits) pretty(limits, n)}
+ggplot(dataframe,aes(x=Date, y=n, col=Category)) + geom_point(pch=16)+geom_line(size=1)+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Tweet Topic count w.r.to Category")+facet_grid(Topic~.)+scale_x_date(format(dataframe$Date, '%m/%d'),breaks=number_ticks(30))+theme(axis.text.x=element_text(angle=60, hjust=1))+scale_y_continuous(breaks=number_ticks(15))
+```
+
+##### Similarly we can obtain the Tweet counts for the Topic w.r.to Gender as below
+
+```{r,warning=FALSE,fig.width=8,fig.height=8,cache=TRUE,echo=FALSE}
+gby=group_by(Ash_full,Date,Topic,Gender)
+dataframe=summarise(gby,n = n())
+dataframe=as.data.frame(dataframe)
+number_ticks <- function(n) {function(limits) pretty(limits, n)}
+ggplot(dataframe,aes(x=Date, y=n, col=Gender)) + geom_point(pch=16)+geom_line(size=1)+scale_x_date() + xlab("Date") + ylab("Tweet counts")+ggtitle("Tweet Topic count w.r.to Gender")+facet_grid(Topic~.)+scale_x_date(format(dataframe$Date, '%m/%d'),breaks=number_ticks(30))+theme(axis.text.x=element_text(angle=60, hjust=1))+scale_y_continuous(breaks=number_ticks(15))
+```
+
+##### There is something interesting, we can have a look at the words which are most frequent in the tweets that are coded with Topic as "Secret","Security"
+
+##### word cloud for Topic "Security"
+```{r,warning=FALSE,fig.width=12,fig.height=12,cache=TRUE,echo=FALSE}
+Ash_security=Ash_full[Ash_full$Topic=="security",]
+df_clean <- wcloud_Ashley(Ash_security$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[50]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+```
+
+##### word cloud for Topic "Secret"
+```{r,warning=FALSE,fig.width=12,fig.height=12,cache=TRUE,echo=FALSE}
+Ash_secret=Ash_full[Ash_full$Topic=="secret",]
+df_clean <- wcloud_Ashley(Ash_secret$Contents)
+freq <- colSums(df_clean)
+freq <- sort(freq,decreasing = T)
+head(freq,50)
+wordcloud(words = names(freq),freq,min.freq = sort(freq,decreasing = T)[[50]],random.order = FALSE,random.color = TRUE,colors = brewer.pal(8, "Dark2"))
+```
+
+##### We can compare the words between Topics "Secret","Security" as below
+```{r,warning=FALSE,fig.width=8,fig.height=8,cache=TRUE,echo=FALSE}
+Ash_security=Ash_full[Ash_full$Topic=="security",]
+df_clean <- wcloud_Ashley(Ash_security$Contents)
+freq_security <- colSums(df_clean)
+freq_security <- sort(freq_security,decreasing = T)
+freq<-freq_security
+words=names(freq_security)
+security_words=as.data.frame(cbind(words,freq,rep("security",length(words))))
+names(security_words)=c("words","freq","Topic")
+Ash_secret=Ash_full[Ash_full$Topic=="secret",]
+df_clean <- wcloud_Ashley(Ash_secret$Contents)
+freq_secret <- colSums(df_clean)
+freq_secret <- sort(freq_secret,decreasing = T)
+freq<-freq_secret
+words=names(freq_secret)
+secret_words=as.data.frame(cbind(words,freq,rep("secret",length(words))))
+names(secret_words)=c("words","freq","Topic")
+word_100=merge(head(secret_words,100),head(security_words,100),by="words") # merging the top 100 from both categories of tweets
+word_100$freq.x=as.numeric(as.character(word_100$freq.x))
+word_100$freq.y=as.numeric(as.character(word_100$freq.y))
+cols <- c("Secret"="#f04546","Security"="#3591d1")
+ggplot(word_100)+geom_bar(aes(x=words,y=freq.x,col="Secret"),stat="identity",width=0.25)+geom_point(aes(x=words,y=freq.y,col="Security",size=0.1))+scale_y_continuous(breaks=number_ticks(15))+coord_flip()
+
+```
+
+##### In the above plot Blue refers Security ,Red refers Secret.And we can compare the frequencies for word "adultery" it has bigger frequency for Secret context and lower frequency for Security context.Where as the word "hack" has the frequencies vice versa to the "aultery".
+ 
+##### We can do much deeper analysis by creating several new variables so that we can infer more about the data. At the end Full data set has the additional columns such as "Topic"(the predicted column using the SVM model),"Hashtags", "Urls", "At_tags", "About_Privacy" and "is_RT" are created for  explicitly for data exploration purposes.
+
+##### some more visulations are in the below pdf these are self explanatory.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
