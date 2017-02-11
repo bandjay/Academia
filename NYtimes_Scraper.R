@@ -1,7 +1,7 @@
 library(rtimes)
 Sys.setenv(NYTIMES_AS_KEY = "4e7c325c6f1d44849eff1dbe583e265c")
-setwd("C:/Users/Jay/Desktop/Prof.Mike/ArticleDB/1998")
-Date="1998/01/01"
+setwd("C:/Users/Jay/Desktop/Prof.Mike/ArticleDB/2008")
+Date="2008/01/01"
 Date <- as.Date(Date, '%Y/%m/%d')
 gsub("[-/]","",Date)
 date=c(rep(NA,10))
@@ -24,7 +24,8 @@ for (j in 1:7)
             Date_mat=gsub("/","",Date_mat)
             today=Date_mat[k]
           for (p in 0:9)
-           {
+           {      
+            Sys.sleep(15)
                   articles=as_search(q="immigration", begin_date =today , end_date = today,page = p,
                         fl="web_url,snippet,lead_paragraph,abstract,headline,source,document_type,word_count",
                         facet_field="section_name,type_of_material",hl=TRUE)
